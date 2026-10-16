@@ -1,0 +1,13 @@
+using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Team;
+
+namespace AAEmu.Game.Core.Managers;
+
+public interface ITeamManager : ILoadable
+{
+    Team GetActiveTeamByUnit(uint unitId);
+    Team GetTeamByObjId(uint objId);
+    Team GetActiveTeam(uint teamId);
+    void SetTeamMemberRole(Character unit, uint teamId, uint memberId, MemberRole role);
+    void MemberRemoveFromTeam(Character unit, Character source, RiskyAction leaveType);
+}

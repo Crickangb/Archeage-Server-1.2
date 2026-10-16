@@ -1,0 +1,33 @@
+{
+  "name": "ArcheAge PlayerBots",
+  "id": "archeage-playerbots",
+  "version": "0.2.0-alpha.7",
+  "license": "GPL-3.0-or-later",
+  "repository": "https://github.com/NulightJens/ArcheAge-PlayerBots",
+  "modulePath": "modules/archeage-playerbots",
+  "host": {
+    "name": "AAEmu",
+    "track": "ArcheAge 1.2",
+    "repository": "https://github.com/AAEmu/AAEmu",
+    "testedBaseCommit": "62e3eb1d87da01194802ac886cd500134facad28"
+  },
+  "hostTracks": [
+    {
+      "id": "AAEmu12",
+      "track": "ArcheAge 1.2 r208022",
+      "repository": "https://github.com/AAEmu/AAEmu",
+      "testedBaseCommit": "62e3eb1d87da01194802ac886cd500134facad28",
+      "status": "build-verified-preview",
+      "compatibilityPatch": "compatibility/aaemu-1.2-r208022-v21.patch",
+      "compatibilityPatchSha256": "8e9fe6483bff89b62550cf672faf1c6894ce40b370f5bab50e46b56645d4f646"
+    }
+  ],
+  "install": {
+    "compatibilityPatch": "compatibility/aaemu-1.2-r208022-v21.patch",
+    "compatibilityPatchSha256": "8e9fe6483bff89b62550cf672faf1c6894ce40b370f5bab50e46b56645d4f646",
+    "gameTargets": "build/AAEmu.PlayerBots.Game.targets",
+    "databaseMigration": "sql/2026-08-25_aaemu_game_bot_archetype_plans.sql",
+    "databaseMigrationSha256": "c5bd4d43fb767837c7042dd2cc968decb69393876e5e5520a74aa721cc4eee5c"
+  },
+  "releaseStatus": "preview-candidate"
+}

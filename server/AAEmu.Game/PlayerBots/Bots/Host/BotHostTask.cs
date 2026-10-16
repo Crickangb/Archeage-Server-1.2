@@ -1,0 +1,485 @@
+﻿using System.Diagnostics;
+using AAEmu.Game.Bots.Blackboard;
+using AAEmu.Game.Bots.Body;
+using AAEmu.Game.Bots.Kernel;
+using AAEmu.Game.Bots.Content.Rotations;
+using AAEmu.Game.Bots.Ops;
+using AAEmu.Game.Core.Managers.Bots;
+using AAEmu.Game.Models.Game.Bots;
+using AAEmu.Game.Models.Tasks.Bots;
+using NLog;
+
+namespace AAEmu.Game.Bots.Host;
+
+public sealed class BotHostTask : AAEmu.Game.Models.Tasks.Task
+{
+    private static Logger Logger { get; } = LogManager.GetCurrentClassLogger();
+    private readonly BotHost _host;
+#if !PLAYERBOTS_AAEMU_3_0
+    private readonly AAEmu.Game.Bots.Social.BotPartyQuestGroupsCoordinator _partyQuests = new();
+    private readonly AAEmu.Game.Bots.Social.BotNativePartyPersistence _partyPersistence;
+#endif
+    private readonly List<BotRuntime> _retiredRuntimes = [];
+    private readonly List<BotRuntime> _logoutRequests = [];
+    private int _running;
+    private DateTime _lastMetricsLogAt = DateTime.MinValue;
+
+    internal BotHostTask(BotHost host)
+    {
+        _host = host;
+#if !PLAYERBOTS_AAEMU_3_0
+        _partyPersistence = new(host);
+#endif
+    }
+
+    internal void InitializeStart(DateTime now)
+    {
+        _lastMetricsLogAt = now;
+    }
+
+    public override void Execute()
+    {
+        if (Cancelled)
+            return;
+        if (Interlocked.CompareExchange(ref _running, 1, 0) != 0)
+        {
+            _host.Metrics.IncrementSkippedTicks();
+            return;
+        }
+
+        var start = Stopwatch.GetTimestamp();
+        try
+        {
+            ExecuteTick(start);
+        }
+        finally
+        {
+            Volatile.Write(ref _running, 0);
+        }
+    }
+
+    private void ExecuteTick(long start)
+    {
+        try
+        {
+            ExecuteTickCore(start);
+        }
+        catch (Exception e)
+        {
+            _host.Metrics.IncrementTickErrors();
+            Logger.Error(e, "BOT host ev=tick_error");
+        }
+    }
+
+    private void ExecuteTickCore(long start)
+    {
+        var nowOffset = _host.TimeProvider.GetUtcNow();
+        var now = nowOffset.UtcDateTime;
+        var hostConfig = BotConfig.Instance;
+        var config = hostConfig;
+        var configuredPercent = (int)Math.Clamp(config.ActivityPercent, 0, 100);
+        var effectivePercent = BotActivityGovernor.EffectiveActivePercent(
+            configuredPercent,
+            _host.Metrics.TickMsEma,
+            config.HostTickBudgetMs,
+            _host.ServerMetrics?.PressureMs ?? double.NaN,
+            config.ServerTickBudgetMs);
+        var windowLength = Math.Max(1, (long)(config.ActivityWindowMs * TimeSpan.TicksPerMillisecond));
+        var windowIndex = now.Ticks / windowLength;
+        var runtimes = _host.GetRuntimeSnapshot();
+#if !PLAYERBOTS_AAEMU_3_0
+        _partyPersistence.Update(config, nowOffset);
+        _partyQuests.Update(runtimes, config, nowOffset);
+#endif
+        _retiredRuntimes.Clear();
+        _logoutRequests.Clear();
+        var isSoleRuntime = runtimes.Length == 1;
+
+        for (var i = 0; i < runtimes.Length; i++)
+        {
+            var runtime = runtimes[i];
+#if !PLAYERBOTS_AAEMU_3_0
+            config = runtime.ConfigurationOverride ?? hostConfig;
+#endif
+            // The bounded one-kill lifecycle is a scale-test harness. Once native
+            // quest autonomy is enabled it must never preempt quest travel,
+            // objectives, reporting, or continued leveling.
+            var questAutonomyEnabled = config.QuestIntakeEnabled || config.QuestCompletionEnabled;
+            var lifecycleEligible = !questAutonomyEnabled &&
+                                    (isSoleRuntime ||
+                                     BotActivityDirectorTask.IsCurrentLifecycleEligible(runtime.Bot));
+#if !PLAYERBOTS_AAEMU_3_0
+            lifecycleEligible &= !runtime.Driver.Owns(runtime.Bot);
+#endif
+            runtime.Schedule.Now = now;
+
+            if (Interlocked.CompareExchange(ref runtime.Running, 1, 0) != 0)
+            {
+                _host.Metrics.IncrementRuntimeOverlaps();
+                continue;
+            }
+
+            BotCombatTask brain;
+            var questActivityClaimed = false;
+            try
+            {
+                lock (runtime.SyncRoot)
+                {
+                    if (runtime.Retired || runtime.Mover?.Cancelled == true || runtime.Brain?.Cancelled == true)
+                    {
+                        _retiredRuntimes.Add(runtime);
+                        continue;
+                    }
+
+#if !PLAYERBOTS_AAEMU_3_0
+                    var actor = runtime.Bot;
+                    if (nowOffset >= runtime.NextWeaponScanAt && !runtime.Driver.Owns(actor) &&
+                        !actor.IsDead && !actor.IsInBattle && !runtime.CombatState.InDuel && runtime.CombatState.Target == null &&
+                        actor.Transform?.Parent == null && actor.Transform?.StickyParent == null &&
+                        runtime.MovementState.Climb == null && !runtime.MovementState.IsFalling && !runtime.MovementState.IsJumping &&
+                        runtime.CombatState.CurrentState is not (BotCombatStateType.Combat or BotCombatStateType.Dueling) &&
+                        actor.SkillTask == null && actor.ActivePlotState == null && !actor.Craft.IsCrafting &&
+                        !AAEmu.Game.Bots.Gathering.BotGatherController.IsActive(runtime) &&
+                        !AAEmu.Game.Bots.Crafting.BotCraftController.IsActive(runtime))
+                    {
+                        runtime.NextWeaponScanAt = nowOffset.AddSeconds(2);
+                        BotArchetypeManager.Instance.EquipLearnedWeapons(actor);
+                    }
+#endif
+                    BotLaborRegistry.Tick(runtime.Bot, DateTime.UtcNow);
+                    if (BotJobRegistry.IsFarmer(runtime.Bot.Id))
+                    {
+                        BotJobRegistry.StepFarmer(runtime);
+                        AAEmu.Game.Bots.Gathering.BotGatherController.Step(runtime);
+                        AAEmu.Game.Bots.Crafting.BotCraftController.Step(runtime);
+                        StepMover(runtime, now, config);
+                        continue;
+                    }
+#if !PLAYERBOTS_AAEMU_3_0
+                    _host.CaptureObservers(runtime, nowOffset);
+                    if (runtime.Driver.BeforeStep(runtime, nowOffset)) continue;
+                    // A native box-opening cast owns this quiet tick, including movement/brain.
+                    if (runtime.EquipmentController.Step(runtime, config, nowOffset))
+                    {
+                        continue;
+                    }
+                    if (_partyQuests.Step(runtime, config, nowOffset))
+                    {
+#endif
+                    var lifecycle = runtime.QuestLifecycleController;
+                    var intake = runtime.QuestIntakeController;
+                    var hasSelectedQuest = lifecycle.HasSelectedQuest;
+                    var canYieldLifecycle = lifecycle.CanYieldForNearbyIntake(runtime);
+                    var hasActiveQuest = runtime.Bot.Quests?.ActiveQuests?.Count > 0;
+                    var shouldProbeIntake = canYieldLifecycle || (!hasSelectedQuest && hasActiveQuest);
+                    var passingBoard = false;
+                    var nearbyStoryIntake = false;
+                    var partyAcceptance = false;
+                    var partyOwnedWork = false;
+#if !PLAYERBOTS_AAEMU_3_0
+                    partyAcceptance = runtime.PartyQuestPriorityIsAcceptance && runtime.PartyQuestPriorityQuestId.HasValue;
+                    partyOwnedWork = partyAcceptance || lifecycle.HasPartyPriorityWork(runtime, nowOffset);
+                    shouldProbeIntake &= !partyOwnedWork;
+                    var canYieldSideReport = lifecycle.CanYieldForNearbyIntake(runtime, includeSideReport: true);
+                    passingBoard = !partyOwnedWork && canYieldSideReport &&
+                                   intake.HasSideReportIntakeOpportunity(runtime, config, nowOffset,
+                                       out nearbyStoryIntake);
+#endif
+                    var nearbyIntake = passingBoard || nearbyStoryIntake || shouldProbeIntake && intake.HasPriorityIntakeOpportunity(
+                        runtime,
+                        config,
+                        nowOffset);
+                    var yieldedLifecycle = nearbyIntake &&
+                                           lifecycle.YieldForNearbyIntake(runtime, nowOffset,
+                                               includeSideReport: passingBoard || nearbyStoryIntake);
+                    if (yieldedLifecycle)
+                    {
+                        // Let intake claim the next tick after lifecycle releases
+                        // its selected work and any owned movement.
+                        questActivityClaimed = true;
+                    }
+                    else
+                    {
+                        var intakeFirst = partyAcceptance || !lifecycle.HasSelectedQuest &&
+                                          (nearbyIntake || !hasActiveQuest);
+                        if (intakeFirst)
+                        {
+#if !PLAYERBOTS_AAEMU_3_0
+                            if (partyAcceptance) lifecycle.PauseForParty(runtime, nowOffset);
+#endif
+                            questActivityClaimed = intake.Step(runtime, config, nowOffset) || partyAcceptance;
+                            if (!questActivityClaimed)
+                                questActivityClaimed = lifecycle.Step(runtime, config, nowOffset);
+                        }
+                        else
+                        {
+                            questActivityClaimed = lifecycle.Step(runtime, config, nowOffset);
+                            if (!questActivityClaimed)
+                                questActivityClaimed = intake.Step(runtime, config, nowOffset);
+                        }
+                    }
+#if !PLAYERBOTS_AAEMU_3_0
+                    }
+                    else questActivityClaimed = true;
+#endif
+                    var logoutRequested = !questActivityClaimed && runtime.LifeController.Step(
+                        runtime,
+                        lifecycleEligible,
+                        nowOffset);
+                    if (logoutRequested)
+                    {
+                        _logoutRequests.Add(runtime);
+                        continue;
+                    }
+                    if (runtime.LifeController.ShouldSuspendRuntime)
+                        continue;
+
+                    runtime.Social.GuardLeader();
+                    StepMover(runtime, now, config);
+                    // A brain captured before Unregister may complete the one already-started step; no step starts after OnCancel.
+                    brain = runtime.Brain;
+                }
+
+#if !PLAYERBOTS_AAEMU_3_0
+                if (runtime.Driver.Owns(runtime.Bot))
+                {
+                    lock (runtime.SyncRoot)
+                        if (!runtime.Retired && runtime.Driver.CanRunBrain)
+                            StepBrain(runtime, brain, now, windowIndex, effectivePercent, config);
+                }
+                else
+#endif
+                    StepBrain(runtime, brain, now, windowIndex, effectivePercent, config);
+
+                lock (runtime.SyncRoot)
+                {
+                    if (!questActivityClaimed && !runtime.Retired &&
+                        runtime.LifeController.Step(runtime, lifecycleEligible, nowOffset))
+                    {
+                        _logoutRequests.Add(runtime);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                RecordError(runtime, e);
+            }
+            finally
+            {
+                Volatile.Write(ref runtime.Running, 0);
+            }
+        }
+
+        foreach (var runtime in _retiredRuntimes)
+        {
+#if !PLAYERBOTS_AAEMU_3_0
+            if (runtime.Driver.Owns(runtime.Bot)) runtime.Driver.Release(runtime);
+#endif
+            _host.Unregister(runtime);
+        }
+
+        // Lifecycle evaluation only queues a request. The normal persisted
+        // DespawnBot path runs after all runtime iteration and SyncRoot locks.
+        foreach (var runtime in _logoutRequests)
+            InvokeLogout(runtime);
+
+        var activeBots = 0;
+        for (var i = 0; i < runtimes.Length; i++)
+        {
+            if (runtimes[i].Schedule.LastActive)
+                activeBots++;
+        }
+
+        var elapsedMs = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        var liveBots = _host.RuntimeCount;
+        _host.Metrics.RecordHostTick(elapsedMs, liveBots, Math.Min(activeBots, liveBots), configuredPercent, effectivePercent);
+        if (!_host.IsStarted)
+            _host.Metrics.RecordPopulation(0, 0);
+
+        if (_lastMetricsLogAt == DateTime.MinValue || now - _lastMetricsLogAt >= TimeSpan.FromMilliseconds(config.MetricsLogIntervalMs))
+        {
+            _lastMetricsLogAt = now;
+            _host.LogMetrics();
+        }
+    }
+
+    private void InvokeLogout(BotRuntime runtime)
+    {
+        var callbackAt = _host.TimeProvider.GetUtcNow();
+        if (!runtime.LifeController.TryBeginLogoutCallback(callbackAt))
+            return;
+
+        var succeeded = false;
+        try
+        {
+            succeeded = _host.LogoutBot(runtime.Bot.Id);
+        }
+        catch (Exception exception)
+        {
+            Logger.Error(exception, $"BOT id={runtime.Bot.Id} ev=life_logout_callback_failed");
+        }
+
+        runtime.LifeController.RecordLogoutResult(
+            runtime.Bot.Id,
+            succeeded,
+            _host.TimeProvider.GetUtcNow());
+    }
+
+    internal void StepMover(BotRuntime runtime, DateTime now, BotConfig config)
+    {
+        // Death is a lifecycle state, not a movement state. Preserve the pending
+        // destination/follow intent for recovery, but never animate or advance a
+        // corpse while the respawn task is pending.
+        if (runtime.Bot.IsDead)
+            return;
+
+        var state = runtime.MovementState;
+        var transform = runtime.Bot.Transform;
+        var worldPosition = transform?.World;
+        if (worldPosition == null)
+        {
+            if (!runtime.MissingTransformLogged)
+            {
+                runtime.MissingTransformLogged = true;
+                Logger.Trace($"BOT id={runtime.Bot.Id} ev=mover_skip reason=missing_transform");
+            }
+            return;
+        }
+
+        runtime.StuckWatch.Update(now, worldPosition.Position, state.Destination.HasValue
+#if !PLAYERBOTS_AAEMU_3_0
+            , runtime.Driver.ObservedFacing(runtime, new DateTimeOffset(now))
+#endif
+            );
+        if (runtime.Mover == null)
+            return;
+
+        var moving = state.Destination != null || state.IsMoving || state.IsFalling || state.FollowTarget != null ||
+                     state.FallVelocity > 0 || state.JumpRequested || state.IsJumping;
+        var groundCheckDue = runtime.Schedule.LastGroundCheckAt == DateTime.MinValue ||
+                             now - runtime.Schedule.LastGroundCheckAt >= TimeSpan.FromMilliseconds(config.GroundCheckIntervalMs);
+        if (!moving && !groundCheckDue)
+            return;
+
+        try
+        {
+            runtime.Mover.Step();
+            runtime.Metrics.MoverSteps++;
+            _host.Metrics.RecordMoverStep();
+        }
+        catch (Exception e)
+        {
+            RecordError(runtime, e);
+        }
+
+        runtime.Schedule.LastGroundCheckAt = now;
+    }
+
+    private void StepBrain(
+        BotRuntime runtime,
+        BotCombatTask brain,
+        DateTime now,
+        long windowIndex,
+        int effectivePercent,
+        BotConfig config)
+    {
+        if (brain == null || now < runtime.Schedule.NextBrainAt)
+            return;
+
+        var brainStart = Stopwatch.GetTimestamp();
+        var active = false;
+        try
+        {
+            active = BotActivityGovernor.IsAlwaysActive(runtime) ||
+                     BotActivityGovernor.IsInRotation(runtime.Bot.Id, windowIndex, effectivePercent);
+#if !PLAYERBOTS_AAEMU_3_0
+            if (runtime.PartyQuestSuppressBrain && !runtime.Bot.IsDead && !runtime.Bot.IsInBattle)
+                return;
+#endif
+
+            // Lifecycle work must not compete with rotation actions. A compiled
+            // combat rotation can remain continuously useful while the bot is
+            // dead and otherwise starve LegacyTickAction forever, leaving the
+            // bot at 0 HP in Combat with its target still attached. Dead bots are
+            // always serviced regardless of the activity governor; BotCombatTask
+            // schedules and completes the bounded respawn without running combat.
+            if (runtime.Bot.IsDead)
+            {
+                active = true;
+                brain.Step();
+                runtime.Metrics.BrainSteps++;
+                return;
+            }
+
+            // Compiled combat rotations can remain continuously useful and
+            // starve LegacyTickAction. Enforce contained-attack floors before
+            // any engine action so a rotation cannot bypass the safety gate.
+            if (brain.TryEnforceNonlethalFloor())
+            {
+                runtime.Metrics.BrainSteps++;
+                return;
+            }
+
+            var engineKind = runtime.CombatState.CurrentState is BotCombatStateType.Combat or BotCombatStateType.Dueling
+                ? BotEngineKind.Combat
+                : BotEngineKind.NonCombat;
+            if (engineKind == BotEngineKind.Combat)
+            {
+                // A planned low-level class has only its native learned kit and
+                // uses BasicCombat's live decision path. Static rotations are
+                // reserved for finalized three-tree classes.
+                var archetype = BotArchetypeManager.Instance.GetState(runtime.Bot)?.ArchetypeName;
+                if (!string.IsNullOrWhiteSpace(archetype))
+                    BotRotationManager.Instance.EnsureAttached(runtime, archetype);
+            }
+            var engine = runtime.Engines[(int)engineKind];
+            if (!active)
+                brain.StepMinimal();
+
+            if (config.UseEngine && engine != null)
+            {
+                _host.Metrics.RecordContextCreated();
+                var context = new BotContext(
+                    runtime.Bot,
+                    runtime,
+                    runtime.Blackboard,
+                    now,
+                    config,
+                    engineKind,
+                    brain,
+                    runtime.Mover);
+                engine.DoNextAction(context, minimal: !active);
+            }
+            else if (active)
+            {
+                brain.Step();
+            }
+
+            runtime.Metrics.BrainSteps++;
+        }
+        catch (Exception e)
+        {
+            RecordError(runtime, e);
+        }
+        finally
+        {
+            var elapsedMs = Stopwatch.GetElapsedTime(brainStart).TotalMilliseconds;
+            runtime.Metrics.LastBrainMs = elapsedMs;
+            runtime.Metrics.BrainMsEma = runtime.Metrics.BrainMsEma <= 0
+                ? elapsedMs
+                : runtime.Metrics.BrainMsEma * 0.9 + elapsedMs * 0.1;
+            var cadence = active ? BotScheduler.Classify(runtime) : BotCadence.Inactive;
+            _host.Metrics.RecordBrainStep(cadence, active);
+            runtime.Schedule.NextBrainAt = now + BotScheduler.NextDelay(cadence, runtime.Bot.Id, _host.Roll());
+            runtime.Schedule.LastActive = active;
+        }
+    }
+
+    private void RecordError(BotRuntime runtime, Exception error)
+    {
+        runtime.CombatState.Diagnostics.RecordError(error);
+        runtime.Metrics.Errors++;
+        _host.Metrics.IncrementTickErrors();
+        Logger.Error(error, $"BOT id={runtime.Bot.Id} ev=host_tick_error");
+    }
+}

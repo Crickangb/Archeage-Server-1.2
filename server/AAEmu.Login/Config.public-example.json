@@ -1,0 +1,38 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Microsoft.AspNetCore.Hosting.Diagnostics": "Warning",
+      "Microsoft.AspNetCore.Routing.EndpointMiddleware": "Warning"
+    }
+  },
+  "SecretKey": "REPLACE_WITH_YOUR_PRIVATE_VALUE",
+  "AutoAccount": false,
+  "SkipHostResolve": false,
+  "InternalNetwork": {
+    "Host": "127.0.0.1",
+    "Port": 1234
+  },
+  "Network": {
+    "Host": "127.0.0.1",
+    "NumConnections": 10,
+    "Port": 1237
+  },
+  "Connections": {
+    "MySQLProvider": {
+      "Database": "aaemu_login",
+      "Host": "127.0.0.1",
+      "Password": "REPLACE_WITH_YOUR_PRIVATE_VALUE",
+      "Port": "%db_port%",
+      "User": "REPLACE_WITH_DATABASE_USER"
+    }
+  },
+  "GameServers": [
+    {
+      "Id": 1,
+      "Name": "AAEmu.Game",
+      "Host": "127.0.0.1",
+      "Port": 1239,
+      "Hidden": false
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "Id": 1,
+  "AdditionalesId": [],
+  "SecretKey": "REPLACE_WITH_YOUR_PRIVATE_VALUE",
+  "Network": {
+    "Host": "127.0.0.1",
+    "Port": 1239,
+    "NumConnections": 10
+  },
+  "StreamNetwork": {
+    "Host": "127.0.0.1",
+    "Port": 1250
+  },
+  "LoginNetwork": {
+    "Host": "127.0.0.1",
+    "Port": "%login_port%"
+  },
+  "Connections": {
+    "MySQLProvider": {
+      "Host": "127.0.0.1",
+      "Port": "%db_port%",
+      "User": "REPLACE_WITH_DATABASE_USER",
+      "Password": "REPLACE_WITH_YOUR_PRIVATE_VALUE",
+      "Database": "aaemu_game"
+    }
+  },
+  "ClientData": {
+    "Sources": [
+      "../../../../AAEmu.Game/bin/Debug/net6.0/ClientData/game_pak"
+    ]
+  },
+  "CharacterNameRegex": "^[a-zA-Z0-9\u0430-\u044f\u0410-\u042f]{1,18}$",
+  "MaxConcurencyThreadPool": 8,
+  "HeightMapsEnable": false,
+  "World": {
+    "MOTD": "Welcome to AAEmu!",
+    "LogoutMessage": "Hope to see you soon.",
+    "AutoSaveInterval": 5.0,
+    "ExpRate": 1.0,
+    "HonorRate": 1.0,
+    "VocationRate": 1.0,
+    "LootRate": 1.0,
+    "GrowthRate": 1.0,
+    "GodMode": false
+  }
+}

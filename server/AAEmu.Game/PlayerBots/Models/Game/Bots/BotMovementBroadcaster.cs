@@ -1,0 +1,305 @@
+using System;
+using System.Numerics;
+using AAEmu.Game.Core.Managers.World;
+using AAEmu.Game.Core.Packets.G2C;
+using AAEmu.Game.Models.Game.Char;
+using AAEmu.Game.Models.Game.Models;
+using AAEmu.Game.Models.Game.Units.Movements;
+using AAEmu.Game.Models.StaticValues;
+using AAEmu.Game.Utils;
+
+namespace AAEmu.Game.Models.Game.Bots
+{
+    public class BotMovementBroadcaster : IBotMovementBroadcaster
+    {
+        private readonly Character _bot;
+        private readonly TimeProvider _time;
+
+        private Vector3 _lastPosition;
+        private Vector3 _lastVelocity;
+        private GameStanceType _lastStance;
+        private MoveTypeAlertness _lastAlertness;
+        private MoveTypeFlags _lastFlags;
+        private byte _lastActorFlags;
+        private DateTime _lastSendTime;
+        private int _regionX;
+        private int _regionY;
+
+        private const double MinSendIntervalMs = 50;
+
+        internal Action<UnitMoveType> MoveTypeSink { get; set; }
+
+        public BotMovementBroadcaster(Character bot, TimeProvider time = null)
+        {
+            _bot = bot ?? throw new ArgumentNullException(nameof(bot));
+            _time = time ?? TimeProvider.System;
+            _lastPosition = bot.Transform.World.Position;
+            _lastVelocity = Vector3.Zero;
+            _lastStance = GameStanceType.Relaxed;
+            _lastAlertness = MoveTypeAlertness.Idle;
+            _lastFlags = MoveTypeFlags.Stopping;
+            _lastActorFlags = 0;
+            _lastSendTime = _time.GetUtcNow().UtcDateTime;
+            _regionX = RegionCoordinate(_lastPosition.X);
+            _regionY = RegionCoordinate(_lastPosition.Y);
+            MoveTypeSink = moveType =>
+            {
+#if !PLAYERBOTS_AAEMU_3_0
+                var includeOwner = AAEmu.Game.Bots.Host.BotDrivers.For(_bot).AllowOwnerMovement(_bot, moveType);
+#else
+                const bool includeOwner = true;
+#endif
+                _bot.BroadcastPacket(new SCOneUnitMovementPacket(_bot.ObjId, moveType), includeOwner);
+            };
+        }
+
+        public void SendMove(Vector3 pos, Vector3 velocity, bool isInBattle)
+        {
+            float speed = velocity.Length();
+            bool running = speed > 3.0f;
+
+            byte actorFlags = (byte)MoveTypeActorFlags.StandingOnSolid;
+            MoveTypeFlags flags = MoveTypeFlags.Moving;
+            GameStanceType stance = isInBattle ? GameStanceType.Combat : GameStanceType.Relaxed;
+            MoveTypeAlertness alertness = isInBattle ? MoveTypeAlertness.Combat : MoveTypeAlertness.Idle;
+
+            if (IsStateUnchanged(pos, velocity, stance, alertness, flags, actorFlags))
+                return;
+
+            UpdateLastState(pos, velocity, stance, alertness, flags, actorFlags);
+            BuildAndBroadcast(pos, velocity, stance, alertness, flags, actorFlags, isStop: false);
+        }
+
+        public void SendSwim(Vector3 pos, Vector3 velocity, bool isInBattle)
+        {
+            var moving=velocity.LengthSquared()>.0001f;
+            var stance=isInBattle?GameStanceType.CoSwim:GameStanceType.Swim;
+            var flags=moving?MoveTypeFlags.Moving:MoveTypeFlags.Stopping;
+            var alertness=isInBattle?MoveTypeAlertness.Combat:MoveTypeAlertness.Idle;
+            if(IsStateUnchanged(pos,velocity,stance,alertness,flags,0))return;
+            UpdateLastState(pos,velocity,stance,alertness,flags,0);
+            BuildAndBroadcast(pos,velocity,stance,alertness,flags,0,isStop:!moving);
+        }
+
+        public void SendStop(Vector3 pos, bool isInBattle)
+        {
+            SendStationary(pos, isInBattle);
+        }
+
+        public void SendFall(Vector3 pos, float fallVelocity, bool isInBattle)
+        {
+            Vector3 velocity = new Vector3(0, 0, fallVelocity);
+            byte actorFlags = 0;
+            MoveTypeFlags flags = MoveTypeFlags.Moving;
+            GameStanceType stance = isInBattle ? GameStanceType.Combat : GameStanceType.Relaxed;
+            MoveTypeAlertness alertness = isInBattle ? MoveTypeAlertness.Combat : MoveTypeAlertness.Idle;
+
+            if (IsStateUnchanged(pos, velocity, stance, alertness, flags, actorFlags))
+                return;
+
+            UpdateLastState(pos, velocity, stance, alertness, flags, actorFlags);
+            BuildAndBroadcast(pos, velocity, stance, alertness, flags, actorFlags, isStop: false);
+        }
+
+        public void SendJump(Vector3 pos, Vector3 velocity, bool isInBattle)
+        {
+            // Actor movement encodes falling as positive VelZ, while world-space Z is upward.
+            var packetVelocity = new Vector3(velocity.X, velocity.Y, -velocity.Z);
+            // DeltaMovement is client input, not velocity. Advertising full-forward input for
+            // an idle jump makes the client blend the run cycle over the vertical arc. Keep it
+            // neutral unless the bot is genuinely carrying horizontal movement through the jump.
+            var hasHorizontalMovement = MathF.Abs(velocity.X) > 0.01f || MathF.Abs(velocity.Y) > 0.01f;
+            byte actorFlags = (byte)MoveTypeActorFlags.Jumping;
+            var flags = MoveTypeFlags.Jumping;
+            var stance = StanceFor(isInBattle);
+            var alertness = isInBattle ? MoveTypeAlertness.Combat : MoveTypeAlertness.Idle;
+
+            if (IsStateUnchanged(pos, packetVelocity, stance, alertness, flags, actorFlags))
+                return;
+
+            UpdateLastState(pos, packetVelocity, stance, alertness, flags, actorFlags);
+            BuildAndBroadcast(pos, packetVelocity, stance, alertness, flags, actorFlags,
+                isStop: !hasHorizontalMovement);
+        }
+
+#if !PLAYERBOTS_AAEMU_3_0
+        public void SendClimb(Vector3 position, Vector3 velocity, uint anchorObjectId, float verticalOffset)
+        {
+            var flags = velocity.Z == 0 ? MoveTypeFlags.Stopping : MoveTypeFlags.Moving;
+            var actor = (byte)MoveTypeActorFlags.HangingFromObject;
+            var wirePosition = _bot.Transform.StickyParent != null ? _bot.Transform.Local.Position : position;
+            var move = BuildMoveType(wirePosition, new Vector3(0, 0, -velocity.Z), GameStanceType.Crouch,
+                MoveTypeAlertness.Idle, flags, actor, velocity.Z == 0);
+            move.GcId = anchorObjectId;
+            // Host decoder: 13-bit vertical coordinate over 100 metres; zero horizontal offset.
+            move.ClimbData = (uint)Math.Clamp((int)MathF.Round(verticalOffset * 8192f / 100f), 0, 8191);
+            move.DeltaMovement = [0, (sbyte)(Math.Sign(velocity.Z) * 127), 0];
+            RefreshSpatialRegion(position);
+            UpdateLastState(position, velocity, GameStanceType.Crouch, MoveTypeAlertness.Idle, flags, actor);
+            MoveTypeSink(move);
+        }
+#endif
+
+        public void SendTeleport(Vector3 pos, bool isInBattle)
+        {
+#if !PLAYERBOTS_AAEMU_3_0
+            if (AAEmu.Game.Bots.Host.BotDrivers.For(_bot).Owns(_bot)) return;
+#endif
+            _bot.Transform.ResetFinalizeTransform();
+            _bot.Transform.Local.SetPosition(pos.X, pos.Y, pos.Z);
+            _bot.Transform.FinalizeTransform();
+
+            SendStationary(pos, isInBattle);
+            _lastPosition = pos - new Vector3(1, 1, 1);
+        }
+
+        public void SendFaceTarget(Vector3 pos, float rotationZ, bool isInBattle)
+        {
+#if !PLAYERBOTS_AAEMU_3_0
+            if (AAEmu.Game.Bots.Host.BotDrivers.For(_bot) is { } driver && driver.Owns(_bot))
+            {
+                driver.RequestFacing(_bot, rotationZ * MathF.PI / 180f);
+                return;
+            }
+#endif
+            _bot.Transform.Local.SetRotationDegree(0f, 0f, rotationZ);
+
+            var zeroVelocity = Vector3.Zero;
+            var actorFlags = (byte)MoveTypeActorFlags.StandingOnSolid;
+            var flags = MoveTypeFlags.Stopping;
+            var stance = StanceFor(isInBattle);
+            var alertness = isInBattle ? MoveTypeAlertness.Combat : MoveTypeAlertness.Idle;
+
+            if (IsStateUnchanged(pos, zeroVelocity, stance, alertness, flags, actorFlags))
+                return;
+
+            UpdateLastState(pos, zeroVelocity, stance, alertness, flags, actorFlags);
+            BuildAndBroadcast(pos, zeroVelocity, stance, alertness, flags, actorFlags, isStop: true);
+        }
+
+        public void SendRelaxedStance(Vector3 pos)
+        {
+            SendStationary(pos, false);
+
+            _bot.BroadcastPacket(new SCUnitModelPostureChangedPacket(_bot, 0, false), true);
+        }
+
+        // ---- Private helpers ----
+
+        private void SendStationary(Vector3 pos, bool isInBattle)
+        {
+            var zeroVelocity = Vector3.Zero;
+            var actorFlags = (byte)MoveTypeActorFlags.StandingOnSolid;
+            var flags = MoveTypeFlags.Stopping;
+            var stance = StanceFor(isInBattle);
+            var alertness = isInBattle ? MoveTypeAlertness.Combat : MoveTypeAlertness.Idle;
+
+            UpdateLastState(pos, zeroVelocity, stance, alertness, flags, actorFlags);
+            BuildAndBroadcast(pos, zeroVelocity, stance, alertness, flags, actorFlags, isStop: true);
+        }
+
+        private static GameStanceType StanceFor(bool isInBattle)
+        {
+            return isInBattle ? GameStanceType.Combat : GameStanceType.Relaxed;
+        }
+
+        private bool IsStateUnchanged(Vector3 pos, Vector3 velocity, GameStanceType stance,
+            MoveTypeAlertness alertness, MoveTypeFlags flags, byte actorFlags)
+        {
+            if ((_time.GetUtcNow().UtcDateTime - _lastSendTime).TotalMilliseconds < MinSendIntervalMs)
+                return true;
+
+            bool posChanged = Vector3.Distance(pos, _lastPosition) > 0.01f;
+            bool velChanged = Vector3.Distance(velocity, _lastVelocity) > 0.01f;
+            bool stanceChanged = stance != _lastStance;
+            bool alertnessChanged = alertness != _lastAlertness;
+            bool flagsChanged = flags != _lastFlags;
+            bool actorFlagsChanged = actorFlags != _lastActorFlags;
+
+            if (posChanged || velChanged || stanceChanged || alertnessChanged || flagsChanged || actorFlagsChanged)
+                return false;
+
+            return true;
+        }
+
+        private void UpdateLastState(Vector3 pos, Vector3 velocity, GameStanceType stance,
+            MoveTypeAlertness alertness, MoveTypeFlags flags, byte actorFlags)
+        {
+            _lastPosition = pos;
+            _lastVelocity = velocity;
+            _lastStance = stance;
+            _lastAlertness = alertness;
+            _lastFlags = flags;
+            _lastActorFlags = actorFlags;
+            _lastSendTime = _time.GetUtcNow().UtcDateTime;
+        }
+
+        private void BuildAndBroadcast(Vector3 pos, Vector3 velocity, GameStanceType stance,
+            MoveTypeAlertness alertness, MoveTypeFlags flags, byte actorFlags, bool isStop)
+        {
+#if !PLAYERBOTS_AAEMU_3_0
+            if (AAEmu.Game.Bots.Host.BotDrivers.For(_bot).Owns(_bot)) return;
+#endif
+            RefreshSpatialRegion(pos);
+            var moveType = BuildMoveType(pos, velocity, stance, alertness, flags, actorFlags, isStop);
+            MoveTypeSink(moveType);
+        }
+
+        private void RefreshSpatialRegion(Vector3 position)
+        {
+            if (_bot.Region == null || !RequiresRegionRefresh(_regionX, _regionY, position))
+                return;
+
+            var previousZone = _bot.Transform.ZoneId;
+            WorldManager.Instance.AddVisibleObject(_bot);
+            _regionX = RegionCoordinate(position.X);
+            _regionY = RegionCoordinate(position.Y);
+            if (_bot.Transform.ZoneId != previousZone)
+                _bot.OnZoneChange(previousZone, _bot.Transform.ZoneId);
+        }
+
+        internal static bool RequiresRegionRefresh(int currentRegionX, int currentRegionY, Vector3 position) =>
+            currentRegionX != RegionCoordinate(position.X) || currentRegionY != RegionCoordinate(position.Y);
+
+        private static int RegionCoordinate(float position) => (int)(position / WorldManager.REGION_SIZE);
+
+        internal UnitMoveType BuildMoveType(Vector3 pos, Vector3 velocity, GameStanceType stance,
+            MoveTypeAlertness alertness, MoveTypeFlags flags, byte actorFlags, bool isStop)
+        {
+            var moveType = (UnitMoveType)MoveType.GetType(MoveTypeEnum.Unit);
+            moveType.X = pos.X;
+            moveType.Y = pos.Y;
+            moveType.Z = pos.Z;
+
+            moveType.VelX = (short)Math.Clamp(velocity.X * 1000f, (float)short.MinValue, (float)short.MaxValue);
+            moveType.VelY = (short)Math.Clamp(velocity.Y * 1000f, (float)short.MinValue, (float)short.MaxValue);
+            moveType.VelZ = (short)Math.Clamp(velocity.Z * 1000f, (float)short.MinValue, (float)short.MaxValue);
+
+            var grounded=((MoveTypeActorFlags)actorFlags).HasFlag(MoveTypeActorFlags.StandingOnSolid);
+            if(grounded)
+                _bot.Transform.Local.SetRotation(0f,0f,_bot.Transform.Local.Rotation.Z);
+            var (rx, ry, rz) = _bot.Transform.Local.ToRollPitchYawSBytesMovement();
+            // Grounded characters rotate around yaw only. Do not broadcast stale
+            // roll/pitch from a previous movement or imported character pose.
+            moveType.RotationX = grounded ? (sbyte)0 : rx;
+            moveType.RotationY = grounded ? (sbyte)0 : ry;
+            moveType.RotationZ = rz;
+
+            moveType.ActorFlags = actorFlags;
+            moveType.Flags = flags;
+
+            // Critical fix: DeltaMovement must be zero for stop packets
+            if (isStop)
+                moveType.DeltaMovement = new sbyte[3] { 0, 0, 0 };
+            else
+                moveType.DeltaMovement = new sbyte[3] { 0, 127, 0 };
+
+            moveType.Stance = stance;
+            moveType.Alertness = alertness;
+            var now = _time.GetUtcNow().UtcDateTime;
+            moveType.Time = (uint)(now - now.Date).TotalMilliseconds;
+
+            return moveType;
+        }
+    }
+}
