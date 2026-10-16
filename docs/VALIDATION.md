@@ -8,6 +8,6 @@
 - Staged content was scanned for forbidden files and common credential patterns. Original source hashes and staged Git hashes are recorded separately to account for normal Git line-ending normalization.
 - Newly written documentation passed the whitespace check. Archive source contains existing trailing whitespace, retained to avoid unrelated source edits.
 
-Executable builds, test output and raw review logs remain outside the uploaded source. Historical counts such as 7,624 tests belong to the separate R575 checkout and are not this archive's test result. Live client compatibility, complete fresh installation, Manager overlays and historical gameplay fixes require their own environment-specific checks.
+Executable builds, test output and raw review logs remain outside the uploaded source. Live client compatibility, complete fresh installation, Manager overlays and historical gameplay fixes require their own environment-specific checks.
 
 Binary artwork is excluded. Login/Game project files make ApplicationIcon conditional on the icon file existing, so this source-only checkout can build without artwork. The two project-file adaptations and excluded files are recorded in IMPORT-MANIFEST.json.

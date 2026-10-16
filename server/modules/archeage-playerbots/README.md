@@ -24,12 +24,7 @@ setup commands and database migration.
 | Game version | Availability |
 | --- | --- |
 | ArcheAge 1.2 r208022 | Current preview; pinned AAEmu host and .NET 10 required |
-| ArcheAge 3.0.4.2 r336598 | Earlier compatibility version; not included in this download |
-| [ArcheAge CN 10.0.2.13 r575](docs/COMPATIBILITY.md#archeage-10) | Working server-bot prototype; download not yet available |
 
-The 10.x prototype has demonstrated movement, combat, loot, interactions, quest
-completion and save/re-entry. Its separate integration is not yet included in the
-public downloads. See [version compatibility](docs/COMPATIBILITY.md) for details.
 
 Choose an exact release when installing or updating. The [changelog](CHANGELOG.md)
 describes what has changed.

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Game-version guide covering ArcheAge 1.2, 3.0 and the working CN 10.0.2.13 r575 prototype.
+- Compatibility guide for the ArcheAge 1.2 integration.
 
 ## 0.2.0-alpha.7 — 2026-09-14 · Preview
 

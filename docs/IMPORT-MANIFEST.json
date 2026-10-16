@@ -21554,8 +21554,10 @@
       "path": "server/modules/archeage-playerbots/CHANGELOG.md",
       "bytes": 589,
       "sha256": "a7c65dd3b5971aaa2efcbed53f68f5a15b8ec3af2d75e8c32bddeb8ea1fc5497",
-      "git_blob_sha": "4a5e46e1322896cd5530d25eca33a76581d4ce1e",
-      "git_content_sha256": "a7c65dd3b5971aaa2efcbed53f68f5a15b8ec3af2d75e8c32bddeb8ea1fc5497"
+      "git_blob_sha": "cd8f7b80e5be8f70ba3e05d9442424e611deb727",
+      "git_content_sha256": "d4f47ee497e95d94b71aca1e86c819dbff14996034c8d0458db9fbefcd8590af",
+      "modified_for_import": "Documentation scoped to the ArcheAge 1.2 integration.",
+      "imported_file_sha256": "6af9b60bf83328bfa0ffcc2dcf7cfcbdaf24f04e91b0b1cb943b953883c92b55"
     },
     {
       "path": "server/modules/archeage-playerbots/compatibility/aaemu-1.2-r208022-v21.patch",
@@ -21568,8 +21570,10 @@
       "path": "server/modules/archeage-playerbots/docs/COMPATIBILITY.md",
       "bytes": 2140,
       "sha256": "042fc3522463b3e0d4618d15f298be780a2b067b25ac35906e06f56e594cfb93",
-      "git_blob_sha": "a49821dcbf8896c208290660488c3c7143c27ae5",
-      "git_content_sha256": "042fc3522463b3e0d4618d15f298be780a2b067b25ac35906e06f56e594cfb93"
+      "git_blob_sha": "e36f4996a17b54af268a816737b7bd606b2a0233",
+      "git_content_sha256": "7044315f59953dd56e9de3282c8df0203816ba3c78f6a8f3b598fe7f3826ca8c",
+      "modified_for_import": "Documentation scoped to the ArcheAge 1.2 integration.",
+      "imported_file_sha256": "c5883a0a9b9e8cdf6980f3b7320eb52ec0376c94698ef40df2f4b2f111e74203"
     },
     {
       "path": "server/modules/archeage-playerbots/docs/INSTALLATION.md",
@@ -21631,8 +21635,10 @@
       "path": "server/modules/archeage-playerbots/README.md",
       "bytes": 3990,
       "sha256": "669499e10085ac404a4c1321ba40d8f09f49062a658919e195866728c2427e41",
-      "git_blob_sha": "70f7c3285c2006086c0e8d53a79ef801e19c3105",
-      "git_content_sha256": "669499e10085ac404a4c1321ba40d8f09f49062a658919e195866728c2427e41"
+      "git_blob_sha": "a305ccc997f68224df7b5c449a65f6d1bbecc80b",
+      "git_content_sha256": "5375bda45c5c7fd48bc4c9cb72bbade841ad07475afbd61993443bde6751e6ad",
+      "modified_for_import": "Documentation scoped to the ArcheAge 1.2 integration.",
+      "imported_file_sha256": "46aed9170de80caac944394bc0a728cab0f1781a5deabf651fb7135dcceb7119"
     },
     {
       "path": "server/modules/archeage-playerbots/sql/2026-08-25_aaemu_game_bot_archetype_plans.sql",
@@ -27157,12 +27163,6 @@
   "historical_guides": [
     {
       "category": "project",
-      "name": "ArchePass-and-quest-step.md",
-      "path": "docs/history/project/ArchePass-and-quest-step.md",
-      "original_sha256": "b3ddc4427771b91d06c9f554ea8a1aa71d78fa7a1feedaf84f63b7aaac56f5d5"
-    },
-    {
-      "category": "project",
       "name": "Bridge-Chunk-FIX-INSTALL.md",
       "path": "docs/history/project/Bridge-Chunk-FIX-INSTALL.md",
       "original_sha256": "1288e7d32e3259fbfaeeec4a017737cc3e19207167ea61fc8e105a16bc9a02ce"
@@ -27187,12 +27187,6 @@
     },
     {
       "category": "project",
-      "name": "Cold-zone-loading-fix.md",
-      "path": "docs/history/project/Cold-zone-loading-fix.md",
-      "original_sha256": "ff8e51e869c04959a60b570d09dced3f32290743b84598f9684bdb0041d12f93"
-    },
-    {
-      "category": "project",
       "name": "Companion-Follow-Recovery-INSTALL.md",
       "path": "docs/history/project/Companion-Follow-Recovery-INSTALL.md",
       "original_sha256": "ffd78df6fab90c877ae1f6e7d30883c0856f32d2d18f5e1b7f2fe4f8bc8a3209"
@@ -27211,12 +27205,6 @@
     },
     {
       "category": "project",
-      "name": "Expedition-and-terrain-settings.md",
-      "path": "docs/history/project/Expedition-and-terrain-settings.md",
-      "original_sha256": "e56dc2981dafce9f2c3be788da1afd8dc89c433d1cac0dda0e553d96f14a71a5"
-    },
-    {
-      "category": "project",
       "name": "Farming-Bridge-UPDATE-INSTALL.md",
       "path": "docs/history/project/Farming-Bridge-UPDATE-INSTALL.md",
       "original_sha256": "ddc7a19689848e3d7c67308dc730209ccdf44734e7479da028e928af0cf5398b"
@@ -27232,24 +27220,6 @@
       "name": "Gathering-Dry-Route-FIX-INSTALL.md",
       "path": "docs/history/project/Gathering-Dry-Route-FIX-INSTALL.md",
       "original_sha256": "1da9e3dcd135c7744c4480381b1d6f7f3bb71b74d93ac57d3318e5c33fe214ca"
-    },
-    {
-      "category": "project",
-      "name": "GM-console-test.md",
-      "path": "docs/history/project/GM-console-test.md",
-      "original_sha256": "a0ca959d6d6130e424edb11eedef8e795ebcdcf8af7a2eba93cb63c26d4deb42"
-    },
-    {
-      "category": "project",
-      "name": "GM-tools-progress.md",
-      "path": "docs/history/project/GM-tools-progress.md",
-      "original_sha256": "fd90152d2738b236b3853e03c0004dc7693284947197e4e0499fa7f3539427b0"
-    },
-    {
-      "category": "project",
-      "name": "Mail-roster-translation.md",
-      "path": "docs/history/project/Mail-roster-translation.md",
-      "original_sha256": "ca3182134578b9fdeae7e5a6714d580ae4404e59dcf83e6710a7de656b85048e"
     },
     {
       "category": "project",
@@ -27274,54 +27244,6 @@
       "name": "Owner-Footsteps-FIX-INSTALL.md",
       "path": "docs/history/project/Owner-Footsteps-FIX-INSTALL.md",
       "original_sha256": "72440dad194e7bc6df420f60c6c68646d66eca67c1b85d7bcfb71b29c2399a34"
-    },
-    {
-      "category": "project",
-      "name": "Patron-benefits-headings.md",
-      "path": "docs/history/project/Patron-benefits-headings.md",
-      "original_sha256": "43b53abe75e88b739b487ab060d57d6da8f697a636c7a814c9fe4231458d2578"
-    },
-    {
-      "category": "project",
-      "name": "Patron-translation-step.md",
-      "path": "docs/history/project/Patron-translation-step.md",
-      "original_sha256": "b2b42e043084c783c5f0a4358633d786581652778738f2b1bd490a020ca0de45"
-    },
-    {
-      "category": "project",
-      "name": "R575-lucky-supplies-issue.md",
-      "path": "docs/history/project/R575-lucky-supplies-issue.md",
-      "original_sha256": "db9520f7319f3ba16a4a2ffa65964b94a3769f5c7a1570794656bac04e3e8746"
-    },
-    {
-      "category": "project",
-      "name": "R575-project-todo.md",
-      "path": "docs/history/project/R575-project-todo.md",
-      "original_sha256": "e785f37711de63d6593147b13895c2c7ff77fc4b5a5bac7b020b11c9ce926e6c"
-    },
-    {
-      "category": "project",
-      "name": "R575-source-location.md",
-      "path": "docs/history/project/R575-source-location.md",
-      "original_sha256": "ec04f84c433ee7e8c9af8b972205df768be136a1180eb7fe84ccde80b7938305"
-    },
-    {
-      "category": "project",
-      "name": "R575-test-status.md",
-      "path": "docs/history/project/R575-test-status.md",
-      "original_sha256": "3dd30806f1ea83e5da2f07a9dcaad0788bda186df4f372152594852164184418"
-    },
-    {
-      "category": "project",
-      "name": "R575-ui-issues-investigation.md",
-      "path": "docs/history/project/R575-ui-issues-investigation.md",
-      "original_sha256": "803c783aa8f04489b1e721b0a35e04fdd5f8f6b51abc3139fd39b6b0da8af051"
-    },
-    {
-      "category": "project",
-      "name": "Seasonal-test-guide.md",
-      "path": "docs/history/project/Seasonal-test-guide.md",
-      "original_sha256": "516b869f526f8d80ba99551b0aecab4a9db830a0976ede20d25ff4d62fcb085d"
     },
     {
       "category": "project",
@@ -27376,66 +27298,6 @@
       "name": "PUBLIC-WEBSITE-INSTALL.md",
       "path": "docs/history/manager/PUBLIC-WEBSITE-INSTALL.md",
       "original_sha256": "96e103aaccf5932d5d538eb90f9cf018d932cad5802265eb7b0f4088490637ee"
-    },
-    {
-      "category": "r575",
-      "name": "CHANGELOG.md",
-      "path": "docs/history/r575/CHANGELOG.md",
-      "original_sha256": "a5e51407e7c396e93ca3047eb71b47c56f61c84cb59247077b72fd62ea60c8ea"
-    },
-    {
-      "category": "r575",
-      "name": "DEVELOPMENT.md",
-      "path": "docs/history/r575/DEVELOPMENT.md",
-      "original_sha256": "9a0c3a008412a1929655f189dd7be3000c86faf10b2953e6620a673a001f18e2"
-    },
-    {
-      "category": "r575",
-      "name": "GOLDEN-RUINS-WORKBENCH.md",
-      "path": "docs/history/r575/GOLDEN-RUINS-WORKBENCH.md",
-      "original_sha256": "aacc98ed3a28058784644eb99d25d39503960f37f8f19f96dbf5baed5d3776e8"
-    },
-    {
-      "category": "r575",
-      "name": "NPC-MOVEMENT-INVESTIGATION.md",
-      "path": "docs/history/r575/NPC-MOVEMENT-INVESTIGATION.md",
-      "original_sha256": "21605b513b4ec5b26c831d38af590f6606bda2b46f63e7980336ad74e0a0b13b"
-    },
-    {
-      "category": "r575",
-      "name": "Seasonal-test-guide.md",
-      "path": "docs/history/r575/Seasonal-test-guide.md",
-      "original_sha256": "d6ae20f40b8a957e5a0052b03ee3ed15a2723a5936a9666350cb2b7bf396c0e9"
-    },
-    {
-      "category": "r575",
-      "name": "SETUP.md",
-      "path": "docs/history/r575/SETUP.md",
-      "original_sha256": "eb9212c4563f2b126928e2bc07200df896082cf47c5ef63939644fb233aa6c75"
-    },
-    {
-      "category": "r575",
-      "name": "STATUS.md",
-      "path": "docs/history/r575/STATUS.md",
-      "original_sha256": "729f37c127af23cac2efd2fbe19af24fff1b8b90870dc3e171ec4f55a9692b92"
-    },
-    {
-      "category": "r575",
-      "name": "TESTING.md",
-      "path": "docs/history/r575/TESTING.md",
-      "original_sha256": "8b468e6775c699ab6f0f87dfa6b5acf2fae15dd18e8c590566f8528936660534"
-    },
-    {
-      "category": "r575-client",
-      "name": "README.md",
-      "path": "docs/history/r575-client/README.md",
-      "original_sha256": "e97d8d590b946e11f6d71e31473e693c76103aa633af06ad7b0dcae2cc24a2d3"
-    },
-    {
-      "category": "r575-launcher",
-      "name": "README.md",
-      "path": "docs/history/r575-launcher/README.md",
-      "original_sha256": "9599c73619496b22b2ceb7910fcaac47435c6f7095ab842626e61e301ad15ccd"
     }
   ],
   "generated_files": [
@@ -27446,6 +27308,8 @@
   "version_target_confirmation": "User explicitly confirmed committing this identified 1.2 source and all guides to Archeage-Server-1.2.",
   "hash_note": "sha256 records original archive/working-file bytes; git_content_sha256 and git_blob_sha record staged Git content, including normal Git line-ending normalization.",
   "import_adaptations": [
-    "Excluded six binary artwork files. Login/Game project ApplicationIcon settings now apply only when the corresponding private/local icon exists. No gameplay source code changed."
-  ]
+    "Excluded six binary artwork files. Login/Game project ApplicationIcon settings now apply only when the corresponding private/local icon exists. No gameplay source code changed.",
+    "Documentation scoped to ArcheAge 1.2; unrelated project guides removed and bundled module documentation narrowed to the 1.2 integration. Gameplay source code unchanged."
+  ],
+  "repository_scope": "ArcheAge 1.2 r208022 server, Discord bot, PlayerBots/Companion Manager, wiki/website, launcher and related tools."
 }

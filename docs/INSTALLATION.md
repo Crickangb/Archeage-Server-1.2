@@ -43,7 +43,6 @@ Store settings only in ignored local files or .NET user secrets as supported by 
 
 Start MySQL, then Login, then Game. Check readiness and database-loading errors before starting the matching client. Common project ports are Login client 1237, Login internal 1234, Game 1239 and streaming 1250; confirm your actual configuration. Keep service-only endpoints private. Test account login, character selection, world entry, movement, saving and re-entry on an isolated installation before switching an existing server.
 
-R575 uses a different World/native ZoneHost architecture. Follow the separate R575 history guide only for that checkout; these Login/Game build instructions do not install native R575 zone hosts.
 
 ## 5. Optional PlayerBots and Manager
 
